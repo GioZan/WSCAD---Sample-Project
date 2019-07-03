@@ -11,6 +11,9 @@ using System.Drawing;
 using System.IO;
 using Newtonsoft.Json;
 using System.Xml;
+using PdfSharp.Pdf;
+using PdfSharp.Drawing;
+using System.Drawing.Drawing2D;
 
 namespace Graphics_WSCAD
 {
@@ -22,7 +25,7 @@ namespace Graphics_WSCAD
     PointF center;
     float proportionalcoef;
     List<Graphics> vectorlist;
-
+    Bitmap bitmap;
 
     /// <summary>
     /// Init Form1
@@ -62,39 +65,32 @@ namespace Graphics_WSCAD
     /// <summary>
     /// draws the axes of the Cartesian plane
     /// </summary>
-    private void DrawCartesian()
+    private void DrawCartesian(Bitmap bitmap)
     {
       Pen pen;
-      Graphics vector;
+      Graphics vector = Graphics.FromImage(bitmap);
       pen = new Pen(Color.Black);
-      vector = CreateGraphics();
 
       vector.DrawLine(pen, 0, center.Y, scrwidth, center.Y);
       vector.DrawLine(pen, center.X, 0, center.X, scrheight);
       vectorlist.Add(vector);
     }
-
-    private void button1_Click(object sender, EventArgs e)
-    {
-      LoadJson();
-      //draw the json graphics
-      Printprimitives();
-      button1.Visible = false;
-      button2.Visible = false;
-    }
     /// <summary>
     /// for every item in the json the procedure set the style and color of the pen and draw the graphics
     /// </summary>
-    private void Printprimitives()
+    private Bitmap Printprimitives(int canvaswidth, int canvasheight)
     {
       //calculation of the resolution coef to draw the objet as big as they can completly fit in the screen
-      CalculateCoef();
-      DrawCartesian();
+      proportionalcoef = CalculateCoef(canvaswidth, canvasheight);
+      bitmap = new Bitmap(Convert.ToInt32(scrwidth), Convert.ToInt32(scrheight), System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+      DrawCartesian(bitmap);
 
+      Graphics vector = Graphics.FromImage(bitmap);
+
+      //Graphics vector = CreateGraphics();
       foreach (Primitive x in jsondata)
       {
         Pen pen;
-        Graphics vector = CreateGraphics();
 
         //set pen color from json property
         pen = new Pen(x.color);
@@ -151,8 +147,10 @@ namespace Graphics_WSCAD
             }
             break;
         }
-        vectorlist.Add(vector);
       }
+      //vector.Clear(Color.Green);
+      vectorlist.Add(vector);
+      return bitmap;
     }
     /// <summary>
     /// get point location in the form
@@ -163,13 +161,13 @@ namespace Graphics_WSCAD
       return new PointF((center.X + (x * proportionalcoef)), (center.Y + (y * proportionalcoef)));
     }
     /// <summary>
-    /// Set the coefficent for keeping the proportions or the objects in the form
+    /// Calculate the coefficent for keeping the proportions or the objects in the form
     /// </summary>
-    private void CalculateCoef()
+    private float CalculateCoef(int width, int height)
     {
-      scrwidth = this.Width;
-      scrheight = this.Height;
-      center = new PointF(this.Width / 2, this.Height / 2);
+      scrwidth = width;
+      scrheight = height;
+      center = new PointF(scrwidth / 2, scrheight / 2);
 
       float minHeight = 0;
       float maxHeight = 0;
@@ -222,25 +220,95 @@ namespace Graphics_WSCAD
         }
       }
 
-      float totalwidth = Math.Abs(minWidth) + Math.Abs(maxWidth) + 10;
-      float totalheight = Math.Abs(minHeight) + Math.Abs(maxHeight) + 10;
+      float totalwidth = 0;
+      float totalheight = 0;
+      if (Math.Abs(minWidth) > Math.Abs(maxWidth))
+        totalwidth = Math.Abs(minWidth) * 3;
+      else
+        totalwidth = Math.Abs(maxWidth) * 3;
+      if (Math.Abs(minHeight) > Math.Abs(maxHeight))
+        totalheight = Math.Abs(minHeight) * 3;
+      else
+        totalheight = Math.Abs(maxHeight) * 3;
 
       //it use the biggest lenght to keep always visible the vectors
       if (totalwidth > totalheight)
-        proportionalcoef = (scrwidth / totalwidth);
+        return (scrwidth / totalwidth);
       else
-        proportionalcoef = (scrheight / totalheight);
+        return (scrheight / totalheight);
     }
-
     /// <summary>
     /// clear all the shape in the screen
     /// </summary>
     private void clearVectors()
     {
-
       foreach (Graphics vector in vectorlist)
         vector.Clear(Color.White);
       vectorlist = new List<Graphics>();
+    }
+    /// <summary>
+    /// Resize and export the bitmap image as pdf
+    /// </summary>
+    private void ExportToPdf(int width, int height)
+    {
+      Bitmap btm = Printprimitives(width, height);
+      try
+      {
+        PdfDocument doc = new PdfDocument();
+        doc.Pages.Add(new PdfPage());
+        XGraphics xgr = XGraphics.FromPdfPage(doc.Pages[0]);
+        XImage img;
+        string tempfile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".", "") + ".bmp");
+        btm.Save(tempfile);
+        img = XBitmapImage.FromFile(tempfile);
+        string name = Path.GetRandomFileName() + ".pdf";
+        xgr.DrawImage(img, 0, 0);
+        doc.Save(name);
+        doc.Close();
+        btm.Dispose();
+        img.Dispose();
+        MessageBox.Show($"File saved in the app directory with name {name}");
+        File.Delete(tempfile);
+      }
+      catch (Exception ex)
+      {
+        MessageBox.Show(ex.Message);
+      }
+    }
+    /// <summary>
+    /// Resizethe bitmap image
+    /// </summary>
+    private Bitmap ResizeImage(Bitmap image, int width, int height)
+    {
+      Bitmap result = new Bitmap(width, height);
+      using (Graphics g = Graphics.FromImage(result))
+      {
+        g.DrawImage(image, 0, 0, width, height);
+      }
+
+      return result;
+      //var brush = new SolidBrush(Color.Black);
+      ////get scale
+      //float scale = Math.Min(width / image.Width, height / image.Height);
+      ////create a new bitmap with new dimension
+      //var bmp = new Bitmap((int)width, (int)height);
+      ////copy and draw graphics in the new file
+      //var graph = Graphics.FromImage(bmp);
+      //graph.InterpolationMode = InterpolationMode.High;
+      //graph.CompositingQuality = CompositingQuality.HighQuality;
+      //graph.SmoothingMode = SmoothingMode.AntiAlias;
+      //var scaleWidth = (int)(image.Width * scale);
+      //var scaleHeight = (int)(image.Height * scale);
+      ////graph.FillRectangle(brush, new RectangleF(0, 0, width, height));
+      //graph.DrawImage(image, ((int)width - scaleWidth) / 2, ((int)height - scaleHeight) / 2, scaleWidth, scaleHeight);
+      //return bmp;
+    }
+    private void button1_Click(object sender, EventArgs e)
+    {
+      LoadJson();
+      //draw the json graphics
+      bitmap = Printprimitives(pictureBox1.Width, pictureBox1.Height);
+      pictureBox1.Image = bitmap;
     }
 
     private void Form1_ResizeEnd(object sender, EventArgs e)
@@ -249,7 +317,8 @@ namespace Graphics_WSCAD
       if (vectorlist != null && vectorlist.Count > 0)
       {
         clearVectors();
-        Printprimitives();
+        bitmap = Printprimitives(pictureBox1.Width, pictureBox1.Height);
+        pictureBox1.Image = bitmap;
       }
     }
 
@@ -259,7 +328,8 @@ namespace Graphics_WSCAD
       if (vectorlist != null && vectorlist.Count > 0)
       {
         clearVectors();
-        Printprimitives();
+        bitmap = Printprimitives(pictureBox1.Width, pictureBox1.Height);
+        pictureBox1.Image = bitmap;
       }
     }
 
@@ -269,7 +339,8 @@ namespace Graphics_WSCAD
       if (vectorlist != null && vectorlist.Count > 0)
       {
         clearVectors();
-        Printprimitives();
+        bitmap = Printprimitives(pictureBox1.Width, pictureBox1.Height);
+        pictureBox1.Image = bitmap;
       }
     }
 
@@ -277,9 +348,16 @@ namespace Graphics_WSCAD
     {
       LoadXml();
       //draw the xml graphics
-      Printprimitives();
-      button1.Visible = false;
-      button2.Visible = false;
+      bitmap = Printprimitives(pictureBox1.Width, pictureBox1.Height);
+      pictureBox1.Image = bitmap;
+    }
+
+    private void button3_Click(object sender, EventArgs e)
+    {
+      int width = 0, height = 0;
+      if (!int.TryParse(textBox1.Text, out width) || !int.TryParse(textBox2.Text, out height))
+        MessageBox.Show("Insert integer values.");
+      ExportToPdf(width, height);
     }
   }
 }
