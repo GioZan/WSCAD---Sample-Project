@@ -251,13 +251,16 @@ namespace Graphics_WSCAD
     /// </summary>
     private void ExportToPdf(int width, int height)
     {
+      //get the bitmap of the requested sizes
       Bitmap btm = Printprimitives(width, height);
       try
       {
+        //new pdf doc
         PdfDocument doc = new PdfDocument();
         doc.Pages.Add(new PdfPage());
         XGraphics xgr = XGraphics.FromPdfPage(doc.Pages[0]);
         XImage img;
+        //get the bitmap and save it as pdf doc
         string tempfile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".", "") + ".bmp");
         btm.Save(tempfile);
         img = XBitmapImage.FromFile(tempfile);
@@ -268,6 +271,7 @@ namespace Graphics_WSCAD
         btm.Dispose();
         img.Dispose();
         MessageBox.Show($"File saved in the app directory with name {name}");
+        //delete temp file
         File.Delete(tempfile);
       }
       catch (Exception ex)
@@ -275,34 +279,7 @@ namespace Graphics_WSCAD
         MessageBox.Show(ex.Message);
       }
     }
-    /// <summary>
-    /// Resizethe bitmap image
-    /// </summary>
-    private Bitmap ResizeImage(Bitmap image, int width, int height)
-    {
-      Bitmap result = new Bitmap(width, height);
-      using (Graphics g = Graphics.FromImage(result))
-      {
-        g.DrawImage(image, 0, 0, width, height);
-      }
 
-      return result;
-      //var brush = new SolidBrush(Color.Black);
-      ////get scale
-      //float scale = Math.Min(width / image.Width, height / image.Height);
-      ////create a new bitmap with new dimension
-      //var bmp = new Bitmap((int)width, (int)height);
-      ////copy and draw graphics in the new file
-      //var graph = Graphics.FromImage(bmp);
-      //graph.InterpolationMode = InterpolationMode.High;
-      //graph.CompositingQuality = CompositingQuality.HighQuality;
-      //graph.SmoothingMode = SmoothingMode.AntiAlias;
-      //var scaleWidth = (int)(image.Width * scale);
-      //var scaleHeight = (int)(image.Height * scale);
-      ////graph.FillRectangle(brush, new RectangleF(0, 0, width, height));
-      //graph.DrawImage(image, ((int)width - scaleWidth) / 2, ((int)height - scaleHeight) / 2, scaleWidth, scaleHeight);
-      //return bmp;
-    }
     private void button1_Click(object sender, EventArgs e)
     {
       LoadJson();
